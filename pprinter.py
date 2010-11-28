@@ -12,7 +12,6 @@ def pprinter(headers, values):
 		paddedValues = []
 		columnWidth = max([len(text) for text in col_text])
 		paddedHeaders.append(col_text[0].center(columnWidth))
-		print col_text
 		for text in col_text[1:]:
 			paddedValues.append(text.center(columnWidth))
 		paddedValuesList.append(paddedValues)
