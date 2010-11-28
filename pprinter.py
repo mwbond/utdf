@@ -1,6 +1,8 @@
 # Matthew Bond
 # Nov 26, 2010
 # pprinter.py
+# Code mostly borrowed from Mike DeSimone from
+# http://stackoverflow.com/questions/3697763/pretty-printer-with-python
 
 def pprinter(headers, values):
 	paddedHeaders = []
