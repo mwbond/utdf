@@ -2,9 +2,16 @@
 # A main test class
 
 import os
-import chart
 
+import chart
 import utdf
+
+def output(section):
+    s_chart = chart.Chart()
+    s_chart.rows.append([''] + section.col_names)
+    for r_name, row in zip(section.row_names, section.data):
+        s_chart.rows.append([r_name] + row)
+    s_chart.output()
 
 def main():
     folder = 'Data'
@@ -14,13 +21,15 @@ def main():
             f_path = os.path.join(folder, f_name)
             new = utdf.UTDF(f_path)
             if old is not None:
-                ch = chart.Chart()
-                ch.rows.append(['Section', 'Row', 'Column', 'Old', 'New'])
-                for s, c, r in new.find_changed(old, section='Nodes'):
-                    r = [s, c, r, old.data[s][c][r], new.data[s][c][r]]
-                    ch.rows.append(r)
-                ch.output()
-                input()
+                for key in new.sections:
+                    a = new.sections[key]
+                    b = old.sections[key]
+                    output = a.diff_rows(b)
+                    if any(output):
+                        print(a.row_names)
+                        print(b.row_names)
+                        print(output)
+                        input('Press Enter')
             old = new
 
 if __name__ == '__main__':

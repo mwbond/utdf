@@ -2,7 +2,7 @@
 # A simple class for easy output of charts
 
 class Chart():
-    def __init__(self, headers_rpt=30, rows=None):
+    def __init__(self, headers_rpt=30):
         if rows is None:
             rows = []
         self.headers_rpt = headers_rpt

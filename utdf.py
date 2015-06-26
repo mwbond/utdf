@@ -1,13 +1,41 @@
 # Matthew Bond
 # A class for working with UTDF (Universal Traffic Data Format) files
 
-import collections
 import csv
 import re
 
+class Section():
+    def __init__(self):
+        self.data = []
+        self.col_names = []
+        self.row_names = []
+
+    def add_value(self, c_name, r_name, value):
+        if r_name not in self.row_names:
+            self.row_names.append(r_name)
+            self.data.append([None] * len(self.col_names))
+        if c_name not in self.col_names:
+            self.col_names.append(c_name)
+            for row in self.data:
+                row.append(None)
+        x = self.row_names.index(r_name)
+        y = self.col_names.index(c_name)
+        self.data[x][y] = value
+
+    def get_diff_cols(self, other):
+        self_set, other_set = set(self.col_names), set(other.col_names)
+        return (self_set - other_set), (other_set - self_set)
+
+    def get_diff_rows(self, other):
+        self_set, other_set = set(self.row_names), set(other.row_names)
+        return (self_set - other_set), (other_set - self_set)
+
+    def diff(self, other):
+        pass
+
 class UTDF():
     def __init__(self, f_path=None):
-        self.data = collections.OrderedDict()
+        self.sections = {}
         if f_path is not None:
             self.build(f_path)
 
@@ -23,58 +51,11 @@ class UTDF():
                 elif len(row) == 1:
                     match = section_re.fullmatch(row[0])
                     if match:
-                        section = match.group(1)
-                        self.data[section] = collections.OrderedDict()
+                        s_name = match.group(1)
+                        self.sections[s_name] = Section()
                         headers = []
                 elif headers == []:
                     headers = row[1:]
-                    for col_name in headers:
-                        self.data[section][col_name] = {}
                 else:
-                    self.data[section][row[0]] = collections.OrderedDict()
-                    for col_name, value in zip(headers, row[1:]):
-                        self.data[section][row[0]][col_name] = value
-
-    def find_all(self, section=None, row_name=None, col_name=None):
-        for s in self.data:
-            if (section is None) or (s == section):
-                for r in self.data[s]:
-                    if (row_name is None) or (r == row_name):
-                        for c in self.data[s][r]:
-                            if (col_name is None) or (c == col_name):
-                                yield s, r, c
-
-    def find_added(self, other, **kwargs):
-        for s, r, c in other.find_all(**kwargs):
-            try:
-                original = self.data[s][r][c]
-            except KeyError:
-                yield s, r, c
-
-
-    def find_removed(self, other, **kwargs):
-        for s, r, c in self.find_all(**kwargs):
-            try:
-                new = other.data[s][r][c]
-            except KeyError:
-                yield s, r, c
-
-    def find_changed(self, other, **kwargs):
-        for s, r, c in self.find_all(**kwargs):
-            try:
-                new = other.data[s][r][c]
-            except KeyError:
-                pass
-            else:
-                if self.data[s][r][c] != new:
-                    yield s, r, c
-
-    def find_unchanged(self, other, **kwargs):
-        for s, r, c in self.find_all(**kwargs):
-            try:
-                new = other.data[s][r][c]
-            except KeyError:
-                pass
-            else:
-                if self.data[s][r][c] == new:
-                    yield s, r, c
+                    for c_name, value in zip(headers, row[1:]):
+                        self.sections[s_name].add_value(c_name, row[0], value)
