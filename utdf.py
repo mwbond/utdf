@@ -47,7 +47,7 @@ class UTDF():
             reader = csv.reader(csv_file)
             for row in reader:
                 if not row:
-                    pass
+                    continue
                 elif len(row) == 1:
                     match = section_re.fullmatch(row[0])
                     if match:
