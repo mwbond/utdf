@@ -3,59 +3,65 @@
 
 import csv
 import re
+import sqlite3
 
-class Section():
-    def __init__(self):
-        self.data = []
-        self.col_names = []
-        self.row_names = []
+def get_data(f_path):
+    section_name, col_names, data = None, None, []
+    with open(f_path, 'r', newline='') as csv_file:
+        reader = csv.reader(csv_file)
+        for row in reader:
+            if not row:
+                yield section_name, col_names, data
+                section_name, col_names, data = None, None, []
+            elif len(row) == 1:
+                match = table_re.fullmatch(row[0])
+                if match:
+                    section_name = match.group(1)
+            elif col_names is None:
+                col_names = row
+            else:
+                data.append(row)
 
-    def add_value(self, c_name, r_name, value):
-        if r_name not in self.row_names:
-            self.row_names.append(r_name)
-            self.data.append([None] * len(self.col_names))
-        if c_name not in self.col_names:
-            self.col_names.append(c_name)
-            for row in self.data:
-                row.append(None)
-        x = self.row_names.index(r_name)
-        y = self.col_names.index(c_name)
-        self.data[x][y] = value
+def build_cmds(table_name, col_names, sql_types):
+    col_names = [name.lower().replace(' ', '_')  for name in col_names]
+    columns = ', '.join([' '.join(col) for col in zip(col_names, sql_types)])
+    create_cmd = 'CREATE TABLE ' + table_name + ' (' + columns + ')'
+    insert_cmd = 'INSERT INTO ' + table_name + ' VALUES ('
+    insert_cmd += ', '.join(['?'] * len(col_names)) + ')'
+    return create_cmd, insert_cmd
 
-    def get_diff_cols(self, other):
-        self_set, other_set = set(self.col_names), set(other.col_names)
-        return (self_set - other_set), (other_set - self_set)
+def build_table(db_path, table_name, col_names, data, unique=False):
+    sql_types = ['TEXT'] * len(col_names)
+    if unique:
+        sql_types[0] += ' UNIQUE'
+    create_cmd, insert_cmd = build_cmds(table_name, col_names, sql_types)
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+    cur.execute('DROP TABLE IF EXISTS ' + table_name)
+    cur.execute(create_cmd)
+    for row in data:
+        cur.execute(insert_cmd, tuple(row))
+    conn.commit()
+    conn.close()
 
-    def get_diff_rows(self, other):
-        self_set, other_set = set(self.row_names), set(other.row_names)
-        return (self_set - other_set), (other_set - self_set)
-
-    def diff(self, other):
-        pass
+def build_db(db_path, f_path):
+    attributes = {}
+    for section_name, col_names, data in get_data(f_path):
+        if section_name == 'Network':
+            for key, value in zip(*data):
+                attributes[key] = value
+        elif section_name == 'Network':
+            build_table(section_name, col_names, data, True)
+        else:
+            pass
+    return attributes
 
 class UTDF():
-    def __init__(self, f_path=None):
-        self.sections = {}
+    UTDF_VERSION = '8'
+    def __init__(self, db_path, f_path=None):
+        self.db = db_path
         if f_path is not None:
-            self.build(f_path)
+            build_db(db_path, f_path)
 
-    def build(self, f_path):
-        self.data = {}
-        headers, section = [], 'None'
-        section_re = re.compile('\[(.+)\]')
-        with open(f_path, 'r', newline='') as csv_file:
-            reader = csv.reader(csv_file)
-            for row in reader:
-                if not row:
-                    continue
-                elif len(row) == 1:
-                    match = section_re.fullmatch(row[0])
-                    if match:
-                        s_name = match.group(1)
-                        self.sections[s_name] = Section()
-                        headers = []
-                elif headers == []:
-                    headers = row[1:]
-                else:
-                    for c_name, value in zip(headers, row[1:]):
-                        self.sections[s_name].add_value(c_name, row[0], value)
+    def correct_version(self):
+        return True
