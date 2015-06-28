@@ -3,19 +3,18 @@
 
 import os
 
-import utdf
+import utdf.build
 
 
 def main():
-    folder = 'data'
+    folder = os.path.join(os.pardir, 'data')
     for f_name in os.listdir(folder):
         if f_name[-4:] == '.csv':
-            f_path = os.path.join(os.pardir, folder, f_name)
+            f_path = os.path.join(folder, f_name)
             db_path = f_path[:-3] + 'db'
-            attributes = utdf.build_db(db_path, f_path)
-            u = utdf.UTDF(db_path, attributes)
-            print(u.correct_version())
-            utdf.save_table_to_csv(db_path, 'Phases')
+            print(db_path)
+            utdf.build.build_db(db_path, f_path)
+            utdf.build.save_table_to_csv(db_path, 'Network')
 
 if __name__ == '__main__':
     main()

@@ -1,5 +1,5 @@
 # Matthew Bond
-# A class for working with UTDF (Universal Traffic Data Format) files
+# Comparing and analyzing UTDF sqlite dbs
 
 
 class UTDF():

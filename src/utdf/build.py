@@ -1,5 +1,5 @@
 # Matthew Bond
-# A class for working with UTDF (Universal Traffic Data Format) files
+# Building a sqlite db from UTDF (Universal Traffic Data Format) csv files
 
 import csv
 import sqlite3
@@ -73,23 +73,21 @@ def transpose(col_names, data, col_desc):
 
 
 def build_db(db_path, f_path):
-    attributes = {}
     for section_name, col_names, data in get_data(f_path):
+        unique = False
         if section_name == 'Network':
-            for key, value in data:
-                attributes[key] = value
+            col_names, data = zip(*data)
+            data = [data]
         elif section_name == 'Nodes':
-            build_table(db_path, section_name, col_names, data, True)
+            unique = True
         else:
+            col_desc = 'direction'
             if section_name == 'Phases':
                 col_desc = 'phase'
             elif section_name == 'Timeplans':
                 col_desc = None
-            else:
-                col_desc = 'direction'
             col_names, data = transpose(col_names, data, col_desc)
-            build_table(db_path, section_name, col_names, data)
-    return attributes
+        build_table(db_path, section_name, col_names, data, unique)
 
 
 def save_table_to_csv(db_path, table_name):
