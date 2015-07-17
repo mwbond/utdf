@@ -2,53 +2,65 @@
 # A simple class for easy output of charts
 
 class Chart():
-    def __init__(self, data=None):
+    def __init__(self, data=None, col_names=None, row_names=None):
+        data = data or []
         self.data = []
-        self.widths = []
-        self.add_data(data)
-        self.has_col_names, self.has_row_names = False, False
-
-    def add_data(self, data):
         for row in data:
-            self.data.append(row)
+            self.add_row(row)
+        self.col_names = col_names or []
+        self.row_names = row_names or []
 
-    def add_labels(self, col_names=None, row_names=None):
-        if col_names is not None:
-            if all([len(row) == len(col_names) for row in self.data]):
-                self.data = [col_names] + self.data
-                self.has_col_names = True
-                row_names = [''] + row_names
-        if (row_names is not None) and (len(self.data) == len(row_names)):
-            for index, name in enumerate(row_names):
-                self.data[index] = [name] + self.data[index]
-            self.has_row_names = True
+    def add_row(self, row, name=None):
+        row = [cell or '-' for cell in row]
+        if self.data != []:
+            self.adjust(row, len(self.data[0]))
+        self.data.append(row)
+        if (name is not None) or self.row_names:
+            self.adjust(self.row_names, len(self.data))
+            self.row_names[len(self.data) - 1] = name or ''
 
-    def get_line(self, r):
-        line = []
-        for w, cell in zip(self.widths, r):
-            line.append(cell.rjust(w, ' '))
-        if self.has_row_names:
-            return line[0] + ' || ' + ' | '.join(line[1:])
+    def adjust(self, row, length):
+        if len(row) < length:
+            row.extend([''] * (length - len(row)))
+
+    def get_line(self, row, widths):
+        line = ['{!s:>{}}'.format(cell, w) for cell, w in zip(row, widths)]
+        if self.row_names:
+            return '{} || {}'.format(line[0], ' | '.join(line[1:]))
         return ' | '.join(line)
 
-    def get_headers(self):
-        table_width = sum(self.widths) + 3 * (len(self.widths) - 1) + 1
-        sep = '-' * table_width
-        headers = self.get_line(self.data[0])
-        return '\n'.join([sep, headers, sep])
+    def get_headers(self, col_names, widths):
+        sep = '-' * (sum(widths) + 3 * (len(widths) - 1) + 1)
+        if self.row_names:
+            col_names = [''] + col_names
+        return '\n'.join([sep, self.get_line(col_names, widths), sep])
+
+    def matches_length(self, row):
+        if self.data and (len(self.data[0]) != len(row)):
+            return False
+        return True
 
     def output(self, col_names_rpt=30):
-        self.update_widths()
+        if self.col_names and self.data:
+            self.adjust(self.col_names, len(self.data[0]))
+        if self.row_names:
+            self.adjust(self.row_names, len(self.data))
+        widths = self.get_widths()
         for count, row in enumerate(self.data):
-            if (self.has_col_names) and (count % col_names_rpt == 0):
-                print(self.get_headers())
-            if (not self.has_col_names) or (count != 0):
-                print(self.get_line(row))
+            if (self.col_names) and (count % col_names_rpt == 0):
+                print(self.get_headers(self.col_names, widths))
+            if self.row_names:
+                row = [self.row_names[count]] + row
+            print(self.get_line(row, widths))
 
     def reset(self):
-        self.data = []
-        self.widths = []
-        self.has_col_names, self.has_row_names = False, False
+        self.data, self.col_names, self.row_names = [], [], []
 
-    def update_widths(self):
-        self.widths = [max(map(len, column)) for column in zip(*self.data)]
+    def get_widths(self):
+        widths = [max(map(len, map(str, row))) for row in zip(*self.data)]
+        if self.col_names:
+            col_widths = map(len, self.col_names)
+            widths = [max(w) for w in zip(col_widths, widths)]
+        if self.row_names:
+            widths = [max(map(len, self.row_names))] + widths
+        return widths
