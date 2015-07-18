@@ -3,28 +3,27 @@
 
 import os
 
-import chart
-import utdf.build
+# import chart
+import utdf.database
 import utdf.utdf
-
-ORIG_PATH_DB = 'US 29_RIO GSI_2015_AM_Phase-1B Day.db'
-ORIG_PATH_CSV = 'US 29_RIO GSI_2015_AM_Phase-1B Day.csv'
-COMP_PATH = 'US 29_RIO GSI_2015_Phase-1 Night.db'
-# COMP_PATH = 'US 29_RIO GSI_2015_AM_Phase-1B Day.db'
 
 
 def main():
     folder = os.path.join(os.pardir, 'data')
+    db_path = os.path.join(folder, 'utdf.db')
     for f_path in os.listdir(folder):
-        db_path = os.path.join(folder, f_path)
-        '''if db_path[-3:] == '.db':
-            print(db_path)
-            utdf.utdf.check_phases(db_path)'''
-        if db_path[-4:] == '.csv':
-            csv_path = db_path
-            db_path = csv_path[:-4] + '.db'
-            utdf.build.build_db(csv_path, db_path)
-            break
+        f_path = os.path.join(folder, f_path)
+        if f_path[-4:] == '.csv':
+            print(f_path)
+            f_name = input('What f_name for this file? ')
+            print()
+            utdf.database.add_csv_to_db(db_path, f_path, f_name)
+    utdf.database.save_table_to_csv(db_path, 'Network')
+    utdf.database.save_table_to_csv(db_path, 'Nodes')
+    utdf.database.save_table_to_csv(db_path, 'Links')
+    utdf.database.save_table_to_csv(db_path, 'Lanes')
+    utdf.database.save_table_to_csv(db_path, 'Timeplans')
+    utdf.database.save_table_to_csv(db_path, 'Phases')
 
 
 if __name__ == '__main__':

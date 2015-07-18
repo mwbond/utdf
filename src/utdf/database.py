@@ -5,49 +5,6 @@ import csv
 import sqlite3
 
 
-FORMAT = {'Network': ['f_name', 'utdfversion', 'metric', 'yellowtime',
-                      'allredtime', 'walk', 'dontwalk', 'hv', 'phf',
-                      'defwidth', 'defflow', 'vehlength', 'heavyvehlength',
-                      'criticalgap', 'followuptime', 'stopthresholdspeed',
-                      'criticalmergegap', 'growth', 'pedspeed',
-                      'losttimeadjust', 'scenariodate', 'scenariotime'],
-          'Nodes': ['f_name', 'intid', 'type', 'x', 'y', 'z', 'description',
-                    'cbd', 'inside_radius', 'outside_radius',
-                    'roundabout_lanes', 'circle_speed'],
-          'Links': ['f_name', 'intid', 'time', 'speed', 'twltl',
-                    'link_is_hidden', 'lanes', 'up_id',
-                    'positioning_distance2', 'distance', 'curve_pt_z',
-                    'street_name_is_hidden', 'mandatory_distance',
-                    'mandatory_distance2', 'positioning_distance', 'median',
-                    'offset', 'curve_pt_y', 'crosswalk_width', 'curve_pt_x',
-                    'grade', 'name', 'direction'],
-          'Lanes': ['f_name', 'intid', 'idealflow', 'bicycles', 'detectphase4',
-                    'detectextend1', 'right_radius', 'lanes', 'signcontrol',
-                    'detectsize2', 'taper', 'traffic_in_shared_lane',
-                    'distance', 'add_lanes', 'peds', 'detectphase2',
-                    'allow_rtor', 'satflow', 'heavyvehicles', 'lastdetect',
-                    'midblock', 'speed', 'detectqueue1', 'phase1',
-                    'lane_group_flow', 'numdetects', 'traveltime',
-                    'detectphase3', 'headwayfact', 'busstops', 'phf',
-                    'detectphase1', 'detectextend2', 'cbd', 'satflowrtor',
-                    'turning_speed', 'alignment', 'losttime', 'switchphase',
-                    'stlanes', 'dest_node', 'detectdelay1', 'firstdetect',
-                    'detectpos2', 'width', 'exit_lanes', 'detectsize1',
-                    'up_node', 'storage', 'volume', 'enter_blocked', 'growth',
-                    'detecttype1', 'shared', 'lost_time_adjust',
-                    'detecttype2', 'satflowperm', 'grade', 'right_channeled',
-                    'permphase1', 'detectpos1', 'direction'],
-          'Timeplans': ['f_name', 'intid', 'lock_timings', 'control_type',
-                        'cycle_length', 'node_0', 'yield', 'referenced_to',
-                        'master', 'node_1', 'offset', 'reference_phase'],
-          'Phases': ['f_name', 'intid', 'vehext', 'minsplit', 'yield', 'brp',
-                     'timebeforereduce', 'mingap', 'end', 'localstart',
-                     'timetoreduce', 'inhibitmax', 'pedcalls', 'dontwalk',
-                     'localyield170', 'maxgreen', 'yield170', 'actgreen',
-                     'walk', 'yellow', 'mingreen', 'allred', 'dualentry',
-                     'localyield', 'recall', 'start', 'direction']}
-
-
 # Yields section_name, col_names, data for each section in the UTDF csv file
 def get_data(csv_path):
     section_name, col_names, data = None, None, []
@@ -68,29 +25,44 @@ def get_data(csv_path):
         yield section_name, col_names, data
 
 
+def sanitize_col_name(col_name):
+    return col_name.lower().replace(' ', '_')
+
+
+# insert_cmd = 'INSERT INTO {} VALUES ({})'.format(table_name, values)
+# Builds a table and inserts the data
+def add_section(cur, table_name, col_names, dict_data):
+    col_names = [sanitize_col_name(name) for name in col_names]
+    columns = ', '.join(['{} {}'.format(col, 'TEXT') for col in col_names])
+    cmd = 'CREATE TABLE IF NOT EXISTS {} ({})'.format(table_name, columns)
+    cur.execute(cmd)
+    cur.execute('SELECT * FROM {}'.format(table_name))
+    existing = [col[0] for col in cur.description]
+    for col in set(col_names) - set(existing):
+        cmd = 'ALTER TABLE {} ADD COLUMN {} TEXT'.format(table_name, col)
+        cur.execute(cmd)
+    for row in dict_data:
+        keys, values = zip(*row.items())
+        keys = ', '.join([sanitize_col_name(name) for name in keys])
+        marks = ', '.join(['?'] * len(values))
+        cmd = 'INSERT INTO {} ({}) VALUES ({})'.format(table_name, keys, marks)
+        cur.execute(cmd, values)
+
+
 # Transposes the data such that the first column in each row (RECORDNAME) is
 # set as a column, and each column name is set as an additional row value
-# unless the column name is DATA
 def transpose(col_names, data):
-    headers, t_data, ignore = list(set(next(zip(*data)))), {}, 'DATA'
+    t_data = {}
     for row in data:
         recordname, intid = row[:2]
-        index = headers.index(recordname)
         for name, value in zip(col_names[2:], row[2:]):
-            if (intid, name) not in t_data:
-                t_data[(intid, name)] = [None] * len(headers)
-            t_data[(intid, name)][index] = value
-    data = []
-    headers = ['INTID'] + headers
-    if col_names[-1] != ignore:
-        headers.append('DIRECTION')
-    for (intid, name), row in t_data.items():
-        if any(row):
-            row = [intid] + row
-            if name != ignore:
-                row.append(name)
-            data.append(row)
-    return headers, data
+            if value:
+                if (intid, name) not in t_data:
+                    t_data[(intid, name)] = {'intid': intid}
+                    if name != 'DATA':
+                        t_data[(intid, name)]['direction'] = name
+                t_data[(intid, name)][recordname] = value
+    return t_data.values()
 
 
 def add_csv_to_db(db_path, csv_path, f_name=None):
@@ -99,15 +71,22 @@ def add_csv_to_db(db_path, csv_path, f_name=None):
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
     for section_name, col_names, data in get_data(csv_path):
-        if section_name == 'Network':
-            col_names, data = zip(*data)
-            data = [data]
-        elif section_name != 'Nodes':
-            col_names, data = transpose(col_names, data)
-        insert_cmd = 'INSERT INTO {} VALUES ({})'.format(table_name, values)
-        for row in data:
-            row = (f_name,) + tuple(row)
-            cur.execute(insert_cmd, row)
+        db_col_names = ['f_name']
+        if section_name == 'Nodes':
+            db_col_names.extend(col_names)
+            dict_data = [dict(zip(col_names, row)) for row in data]
+        else:
+            if section_name == 'Network':
+                dict_data = [dict(data)]
+            else:
+                dict_data = transpose(col_names, data)
+                db_col_names.append('intid')
+            if 'DATA' not in col_names:
+                db_col_names.append('direction')
+            db_col_names.extend(set([row[0] for row in data]))
+        for row in dict_data:
+            row['f_name'] = f_name
+        add_section(cur, section_name, db_col_names, dict_data)
     conn.commit()
     conn.close()
 
@@ -123,5 +102,3 @@ def save_table_to_csv(db_path, table_name):
         for row in cur.fetchall():
             writer.writerow(row)
     conn.close()
-
-col_names = name.lower().replace(' ', '_')
