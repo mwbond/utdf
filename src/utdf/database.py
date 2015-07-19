@@ -2,21 +2,23 @@
 # Building a sqlite db from UTDF (Universal Traffic Data Format) csv files
 
 import csv
+import re
 import sqlite3
 
 
 # Yields section_name, col_names, data for each section in the UTDF csv file
 def get_data(csv_path):
+    section_re = re.compile('\[(.+)\]')
     section_name, col_names, data = None, None, []
     with open(csv_path, 'r', newline='') as csv_file:
-        reader = csv.reader(csv_file)
-        for row in reader:
+        for row in csv.reader(csv_file):
             if not row:
                 yield section_name, col_names, data
                 section_name, col_names, data = None, None, []
             elif len(row) == 1:
-                if (row[0][0] == '[') and (row[0][-1] == ']'):
-                    section_name = row[0].strip('[]')
+                match = section_re.match(row[0])
+                if match:
+                    section_name = match.group(1)
             elif col_names is None:
                 col_names = row
             else:
@@ -29,7 +31,6 @@ def sanitize_col_name(col_name):
     return col_name.lower().replace(' ', '_')
 
 
-# insert_cmd = 'INSERT INTO {} VALUES ({})'.format(table_name, values)
 # Builds a table and inserts the data
 def add_section(cur, table_name, col_names, dict_data):
     col_names = [sanitize_col_name(name) for name in col_names]
@@ -37,8 +38,7 @@ def add_section(cur, table_name, col_names, dict_data):
     cmd = 'CREATE TABLE IF NOT EXISTS {} ({})'.format(table_name, columns)
     cur.execute(cmd)
     cur.execute('SELECT * FROM {}'.format(table_name))
-    existing = [col[0] for col in cur.description]
-    for col in set(col_names) - set(existing):
+    for col in set(col_names) - set([col[0] for col in cur.description]):
         cmd = 'ALTER TABLE {} ADD COLUMN {} TEXT'.format(table_name, col)
         cur.execute(cmd)
     for row in dict_data:
@@ -92,13 +92,12 @@ def add_csv_to_db(db_path, csv_path, f_name=None):
 
 
 def save_table_to_csv(db_path, table_name):
+    csv_path = '{}_{}.csv'.format(db_path[:-3], table_name)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
-    cur.execute('SELECT * FROM ' + table_name)
-    csv_path = db_path[:-3] + '_' + table_name + '.csv'
+    cur.execute('SELECT * FROM {}'.format(table_name))
     with open(csv_path, 'w', newline='') as csv_file:
         writer = csv.writer(csv_file)
         writer.writerow([row[0] for row in cur.description])
-        for row in cur.fetchall():
-            writer.writerow(row)
+        writer.writerows(cur.fetchall())
     conn.close()
