@@ -1,7 +1,7 @@
 # Matthew Bond
 # Comparing and analyzing UTDF sqlite dbs
 
-
+from decimal import Decimal
 import sqlite3
 
 
@@ -18,43 +18,61 @@ def query_db(cur, table_name, col_names=None, where=None):
     return cur.fetchall()
 
 
-def whole_splits(max_g, yar):
-    split = max_g + yar
-    return int(split) == float(split)
+def whole_number(num):
+    return int(num) == num
 
 
-def minimum_green(min_g, yar, min_s, green_time=4):
+def whole_splits(maxgreen, yellow, allred):
+    return whole_number(maxgreen + yellow + allred)
+
+
+def minimum_green(mingreen, yellow, allred, minsplit, green_time=5):
     min_split_green = minsplit - yellow - allred
-    if (min_g <= green_time) or (min_s - yar <= green_time):
+    if (mingreen < green_time) or (min_split_green < green_time):
         return False
     return True
 
 
-def check_phases(db_path):
-    results = {}
-    conn = sqlite3.connect(db_path)
+def check_phases(conn):
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    col_names = ['intid', 'direction', 'mingreen', 'maxgreen', 'yellow',
-                 'allred', 'minsplit']
-    for row in query_db(cur, 'Phases', col_names):
+    identifiers = ['f_name', 'intid', 'direction']
+    values = ['mingreen', 'maxgreen', 'yellow', 'allred', 'minsplit']
+    for row in query_db(cur, 'Phases', identifiers + values):
         try:
-            min_g, max_g, y, ar, min_s = [float(row[key]) for key in col_names]
+            min_g, max_g, y, ar, min_s = [Decimal(row[key]) for key in values]
         except ValueError:
-            print('Error in reading', row['intid'], row['direction'])
+            yield 'Value Error', row
+        except TypeError:
+            yield 'Type Error', row
         else:
-            if not whole_splits(max_g, y + ar):
-                print('Non-whole splits at', row['intid'], row['direction'])
-            if not minimum_green(min_g, y + ar, min_s):
-                print('Low green time at', row['intid'], row['direction'])
-    conn.close()
+            if not whole_splits(max_g, y, ar):
+                yield 'Whole Split Error', row
+            if not minimum_green(min_g, y, ar, min_s, 4):
+                yield 'Low Green Error', row
 
 
-# Returns [intid, (x, y, z), set(link names)] in db_path
-def get_nodes_information(db_path, node_type=None):
-    results, where = [], None
-    conn = sqlite3.connect(db_path)
+def check_timeplans(conn):
+    conn.row_factory = sqlite3.Row
     cur = conn.cursor()
+    identifiers = ['f_name', 'intid']
+    values = ['cycle_length']
+    for row in query_db(cur, 'Timeplans', identifiers + values):
+        try:
+            cycle_length, = [Decimal(row[key]) for key in values]
+        except ValueError:
+            yield 'Value Error', row
+        except TypeError:
+            yield 'Type Error', row
+        else:
+            if not whole_number(cycle_length):
+                yield 'Whole Cycle Error', row
+
+
+# Returns [intid, (x, y, z), set(link names)]
+def get_nodes_information(conn, node_type=None):
+    cur = conn.cursor()
+    results, where = [], None
     if node_type in map(str, range(5)):
         where = {'type': node_type}
     for row in query_db(cur, 'Nodes', ['intid', 'x', 'y', 'z'], where):
@@ -62,11 +80,10 @@ def get_nodes_information(db_path, node_type=None):
         for names in query_db(cur, 'Links', ['name'], {'intid': row[0]}):
             row[2] = row[2] | set(names)
         results.append(row)
-    conn.close()
     return results
 
 
-def match_signal_locations(db_paths):
+'''def match_signal_locations(cur):
     results = {}
     for index, path in enumerate(db_paths):
         for intid, xyz, names in get_nodes_information(path):
@@ -87,4 +104,4 @@ def match_dir_attrs(db_paths, table_name, recordname, intid):
                 results[direction] = [None] * len(db_paths)
             results[direction][index] = value
         conn.close()
-    return results
+    return results'''

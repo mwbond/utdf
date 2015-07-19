@@ -3,7 +3,6 @@
 
 import csv
 import re
-import sqlite3
 
 
 # Yields section_name, col_names, data for each section in the UTDF csv file
@@ -65,11 +64,10 @@ def transpose(col_names, data):
     return t_data.values()
 
 
-def add_csv_to_db(db_path, csv_path, f_name=None):
+def add_csv_to_db(conn, csv_path, f_name=None):
+    cur = conn.cursor()
     if f_name is None:
         f_name = csv_path
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
     for section_name, col_names, data in get_data(csv_path):
         db_col_names = ['f_name']
         if section_name == 'Nodes':
@@ -88,16 +86,13 @@ def add_csv_to_db(db_path, csv_path, f_name=None):
             row['f_name'] = f_name
         add_section(cur, section_name, db_col_names, dict_data)
     conn.commit()
-    conn.close()
 
 
-def save_table_to_csv(db_path, table_name):
-    csv_path = '{}_{}.csv'.format(db_path[:-3], table_name)
-    conn = sqlite3.connect(db_path)
+def save_table_to_csv(conn, table_name):
     cur = conn.cursor()
+    csv_path = '{}.csv'.format(table_name)
     cur.execute('SELECT * FROM {}'.format(table_name))
     with open(csv_path, 'w', newline='') as csv_file:
         writer = csv.writer(csv_file)
         writer.writerow([row[0] for row in cur.description])
         writer.writerows(cur.fetchall())
-    conn.close()
