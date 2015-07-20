@@ -2,7 +2,6 @@
 # Comparing and analyzing UTDF sqlite dbs
 
 from decimal import Decimal
-import sqlite3
 
 
 # A wrapper for a db query
@@ -33,9 +32,7 @@ def minimum_green(mingreen, yellow, allred, minsplit, green_time=5):
     return True
 
 
-def check_phases(conn):
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
+def check_phases(cur):
     identifiers = ['f_name', 'intid', 'direction']
     values = ['mingreen', 'maxgreen', 'yellow', 'allred', 'minsplit']
     for row in query_db(cur, 'Phases', identifiers + values):
@@ -52,9 +49,7 @@ def check_phases(conn):
                 yield 'Low Green Error', row
 
 
-def check_timeplans(conn):
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
+def check_timeplans(cur):
     identifiers = ['f_name', 'intid']
     values = ['cycle_length']
     for row in query_db(cur, 'Timeplans', identifiers + values):
@@ -70,8 +65,7 @@ def check_timeplans(conn):
 
 
 # Returns [intid, (x, y, z), set(link names)]
-def get_nodes_information(conn, node_type=None):
-    cur = conn.cursor()
+def get_nodes_information(cur, node_type=None):
     results, where = [], None
     if node_type in map(str, range(5)):
         where = {'type': node_type}
